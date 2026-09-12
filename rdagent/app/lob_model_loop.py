@@ -171,6 +171,8 @@ def _audit_candidate(
     audit = json.loads(completed.stdout)
     if audit.get("artifact_valid") is not True:
         raise ValueError("LOB candidate did not pass the complete artifact audit")
+    if audit.get("evaluation_segment") != "validation":
+        raise ValueError("LOB candidate ranking requires an independent validation audit")
     return audit
 
 
@@ -217,6 +219,7 @@ def _load_candidate_result(spec: dict[str, object], spec_path: Path) -> dict[str
         "metrics_sha256": _sha256(required["metrics"]),
         "prediction_bundle_sha256": _sha256(required["prediction_bundle"]),
         "implementation_sha256": recorded_implementation_sha,
+        "evaluation_segment": metrics["evaluation_segment"],
         "ranking": ranking,
     }
 
@@ -224,6 +227,8 @@ def _load_candidate_result(spec: dict[str, object], spec_path: Path) -> dict[str
 def _ranking_metrics(metrics: object) -> dict[str, float]:
     if not isinstance(metrics, dict) or not isinstance(metrics.get("overall"), dict):
         raise TypeError("LOB metrics artifact has no overall metric block")
+    if metrics.get("evaluation_segment") != "validation":
+        raise ValueError("LOB candidate ranking requires validation metrics, never test metrics")
     overall = metrics["overall"]
     groups = {
         "mean_direction_f1_macro": [overall.get(f"direction_f1_macro_{h}ms") for h in HORIZONS_MS],
@@ -330,7 +335,7 @@ def run_lob_pool(*, pool: str, qlib_python: str, research_root: str) -> dict[str
                     "source_spec": str(candidate_path),
                     "source_spec_sha256": _sha256(candidate_path),
                     "error_type": type(exc).__name__,
-                }
+                },
             )
     if not completed:
         raise RuntimeError("all LOB challenger candidates failed")
@@ -350,8 +355,10 @@ def run_lob_pool(*, pool: str, qlib_python: str, research_root: str) -> dict[str
         "schema_version": "lob-challenger-registry/v1",
         "pool_id": definition["pool_id"],
         "ranking_rule": (
-            "maximize mean multi-horizon macro-F1, then minimize mean up-Brier, " "then minimize mean tick-MAE"
+            "validation only: maximize mean multi-horizon macro-F1, then minimize mean up-Brier, "
+            "then minimize mean tick-MAE"
         ),
+        "evaluation_segment": "validation",
         "candidate_count": len(candidates),
         "completed_count": len(ranked),
         "failed_count": len(failures),
