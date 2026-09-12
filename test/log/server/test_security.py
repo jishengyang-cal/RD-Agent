@@ -1,11 +1,14 @@
+from collections import defaultdict
 from http import HTTPStatus
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
 import rdagent.log.server.app as server
 import rdagent.log.ui.storage as web_storage
+from rdagent.core.conf import RD_AGENT_SETTINGS
 from rdagent.log.server import debug_app
 from rdagent.log.server.security import (
     parse_competition,
@@ -13,6 +16,95 @@ from rdagent.log.server.security import (
     validate_scenario,
     validate_upload_filename,
 )
+from rdagent.log.storage import FileStorage
+
+
+@pytest.mark.offline
+@pytest.mark.parametrize("credential", [None, "header", "cookie"])
+def test_debug_rejects_unauthenticated_replay_without_side_effects(monkeypatch, credential):
+    monkeypatch.setitem(debug_app.app.config, "AUTH_TOKEN", "fixture-token")
+    messages = defaultdict(list, {"fixture": [{"tag": "fixture", "content": "private"}]})
+    pointers = defaultdict(int, {"fixture": 0})
+    monkeypatch.setattr(debug_app, "msgs_for_frontend", messages)
+    monkeypatch.setattr(debug_app, "pointers", pointers)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Unauthenticated request attempted trace loading or thread creation")
+
+    monkeypatch.setattr(debug_app, "resolve_within", forbidden)
+    monkeypatch.setattr(debug_app.threading, "Thread", forbidden)
+    monkeypatch.setattr(FileStorage, "iter_msg", forbidden)
+    client = debug_app.app.test_client()
+    headers = {"Authorization": "Bearer wrong-token"} if credential == "header" else {}
+    if credential == "cookie":
+        client.set_cookie("rdagent_auth", "wrong-token")
+    responses = [
+        client.post("/upload", data={"scenario": "Finance Data Building"}, headers=headers),
+        client.post("/trace", json={"id": "fixture", "all": True}, headers=headers),
+        client.post("/receive", json={"id": "fixture", "msg": {"tag": "injected"}}, headers=headers),
+        client.post("/control", json={"id": "fixture", "action": "stop"}, headers=headers),
+        client.get("/test", headers=headers),
+    ]
+    for response in responses:
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+        assert response.get_json() == {"error": "Authentication required"}
+    assert dict(messages) == {"fixture": [{"tag": "fixture", "content": "private"}]}
+    assert dict(pointers) == {"fixture": 0}
+
+
+@pytest.mark.offline
+@pytest.mark.parametrize("credential", ["header", "cookie", "unconfigured"])
+def test_debug_reads_authorized_synthetic_fixture(monkeypatch, tmp_path, credential):
+    monkeypatch.setitem(debug_app.app.config, "AUTH_TOKEN", "" if credential == "unconfigured" else "fixture-token")
+    monkeypatch.setattr(debug_app.UI_SETTING, "trace_folder", str(tmp_path / "traces"))
+    monkeypatch.setattr(debug_app, "msgs_for_frontend", defaultdict(list))
+    monkeypatch.setattr(debug_app, "pointers", defaultdict(int))
+    monkeypatch.setattr(RD_AGENT_SETTINGS, "artifact_signing_key", "synthetic-fixture-key-for-security-tests")
+    storage = FileStorage(tmp_path / "traces" / "Finance Data Building")
+    storage.log(SimpleNamespace(experiment_setting="synthetic authorized trace"), tag="scenario.fixture")
+    starts = []
+
+    def synchronous_thread(*, target, args, daemon):
+        def start():
+            starts.append(args[0])
+            target(*args)
+
+        return SimpleNamespace(start=start)
+
+    monkeypatch.setattr(debug_app.threading, "Thread", synchronous_thread)
+    monkeypatch.setattr(debug_app.time, "sleep", lambda _: None)
+    client = debug_app.app.test_client()
+    headers = {"Authorization": "Bearer fixture-token"} if credential == "header" else {}
+    if credential == "cookie":
+        client.set_cookie("rdagent_auth", "fixture-token")
+    response = client.post("/upload", data={"scenario": "Finance Data Building"}, headers=headers)
+    assert response.status_code == HTTPStatus.OK
+    assert starts == [storage.path.resolve()]
+    response = client.post("/trace", json={"id": response.get_json()["id"], "all": True}, headers=headers)
+    assert response.status_code == HTTPStatus.OK
+    messages = response.get_json()
+    assert len(messages) == 2
+    assert messages[0]["tag"] == "feedback.config"
+    assert messages[0]["content"] == {"config": "synthetic authorized trace"}
+    assert messages[1]["tag"] == "END"
+
+
+@pytest.mark.offline
+@pytest.mark.parametrize("application", [server.app, debug_app.app])
+def test_servers_share_cookie_and_public_route_contract(monkeypatch, application, tmp_path):
+    monkeypatch.setitem(application.config, "AUTH_TOKEN", "fixture-token")
+    (tmp_path / "index.html").write_text("synthetic public shell")
+    monkeypatch.setattr(application, "static_folder", str(tmp_path))
+    client = application.test_client()
+    assert client.get("/").status_code == HTTPStatus.OK
+    assert client.options("/trace").status_code == HTTPStatus.OK
+    assert client.get("/test").status_code == HTTPStatus.UNAUTHORIZED
+    client.set_cookie("rdagent_auth", "fixture-token")
+    assert client.get("/test").status_code == HTTPStatus.OK
+    assert client.get("/test", headers={"Authorization": "Bearer wrong-token"}).status_code == HTTPStatus.UNAUTHORIZED
+    client.delete_cookie("rdagent_auth")
+    monkeypatch.setitem(application.config, "AUTH_TOKEN", "")
+    assert client.get("/test").status_code == HTTPStatus.OK
 
 
 class _Response:
@@ -23,6 +115,7 @@ class _Response:
 @pytest.mark.offline
 def test_debug_trace_uses_configured_folder(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     calls = []
+    monkeypatch.setitem(debug_app.app.config, "AUTH_TOKEN", "")
     monkeypatch.setattr(debug_app.UI_SETTING, "trace_folder", str(tmp_path / "traces"))
     monkeypatch.setattr(
         debug_app.threading,

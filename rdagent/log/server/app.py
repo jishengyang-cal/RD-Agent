@@ -29,6 +29,7 @@ from werkzeug.utils import secure_filename
 from rdagent.log.server.security import (
     SCENARIO_TARGETS,
     parse_competition,
+    require_authentication,
     resolve_within,
     validate_scenario,
     validate_upload_filename,
@@ -47,21 +48,7 @@ app.config["AUTH_TOKEN"] = UI_SETTING.server_auth_token
 _YELLOW = "\033[33m"
 _RESET = "\033[0m"
 
-_PUBLIC_ENDPOINTS = {"favicon", "index", "server_static_files", "static"}
-
-
-@app.before_request
-def _require_authentication() -> Response | tuple[Response, int] | None:
-    token = app.config.get("AUTH_TOKEN", "")
-    if not token or request.method == "OPTIONS" or request.endpoint in _PUBLIC_ENDPOINTS:
-        return None
-
-    authorization = request.headers.get("Authorization", "")
-    header_token = authorization.removeprefix("Bearer ") if authorization.startswith("Bearer ") else ""
-    provided_token = header_token or request.cookies.get("rdagent_auth", "")
-    if not provided_token or not hmac.compare_digest(provided_token, token):
-        return jsonify({"error": "Authentication required"}), 401
-    return None
+app.before_request(require_authentication)
 
 
 class _YellowWarningFormatter(logging.Formatter):
