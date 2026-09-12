@@ -148,7 +148,11 @@ spec to another filename does not create a distinct candidate. The search
 surface is limited to model and training settings, with strict-L2 readiness
 required and sealed final windows, champion locks, and historical VAP excluded.
 
-Existing candidate results are reused and audited again. For candidates
+Existing validation candidate results are reused and audited again. Both
+metrics and the independent audit must declare ``evaluation_segment=validation``.
+Legacy test/development-test outputs remain diagnostic evidence, but cannot
+enter this ranking; do not relabel them as validation results. Final-test data
+must remain outside candidate selection. For candidates
 without a published run directory, the research runner is invoked with
 ``--resume-incomplete``. Any training, result-validation, or artifact-audit
 failure prevents publication of a partial ranking. Recover failed candidates
@@ -156,7 +160,7 @@ before retrying the pool.
 
 The completed registry is written beneath the candidates' ``output_root`` as
 ``challenger-pool-<pool_id>.json``. It contains every audited candidate in
-rank order, using mean multi-horizon macro-F1 descending, then mean up-Brier
+rank order, using validation mean multi-horizon macro-F1 descending, then mean up-Brier
 and mean tick-MAE ascending, with run ID as the final tie-breaker. The
 shortlist takes up to ``top_k`` candidates whose audit reports
 ``baseline_screen.screening_effective=true``; it can be empty even when all

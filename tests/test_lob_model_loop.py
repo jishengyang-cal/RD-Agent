@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from rdagent.app import lob_model_loop
 from rdagent.app.lob_model_loop import (
     HORIZONS_MS,
+    _load_candidate_result,
     _run_id,
     _runner,
     run_lob_pool,
@@ -26,8 +26,8 @@ def _spec(tmp_path: Path) -> tuple[Path, dict[str, Any]]:
                 "schema_version": "strict-l2-training-readiness/v1",
                 "formal_ready": True,
                 "strict_l2_only": True,
-            }
-        )
+            },
+        ),
     )
     value = {
         "schema_version": "lob-experiment-spec/v1",
@@ -98,7 +98,7 @@ def _publish_candidate(spec_path: Path, *, f1: float) -> None:
     spec = json.loads(spec_path.read_text())
     run_root = Path(spec["output_root"]) / _run_id(spec)
     run_root.mkdir(parents=True)
-    metrics = {"overall": {}}
+    metrics = {"overall": {}, "evaluation_segment": "validation"}
     for horizon in HORIZONS_MS:
         metrics["overall"][f"direction_f1_macro_{horizon}ms"] = f1
         metrics["overall"][f"up_brier_{horizon}ms"] = 0.2
@@ -142,8 +142,8 @@ def test_lob_pool_ranks_completed_immutable_candidates(
                 "pool_id": "round-01",
                 "candidates": [str(first), str(second)],
                 "top_k": 1,
-            }
-        )
+            },
+        ),
     )
     scripts = tmp_path / "scripts"
     scripts.mkdir()
@@ -154,6 +154,7 @@ def test_lob_pool_ranks_completed_immutable_candidates(
         "_audit_candidate",
         lambda *_args: {
             "artifact_valid": True,
+            "evaluation_segment": "validation",
             "baseline_screen": {"screening_effective": True},
         },
     )
@@ -182,8 +183,8 @@ def test_lob_pool_keeps_audited_rejection_out_of_shortlist(
                 "pool_id": "rejected-round",
                 "candidates": [str(candidate)],
                 "top_k": 1,
-            }
-        )
+            },
+        ),
     )
     scripts = tmp_path / "scripts"
     scripts.mkdir()
@@ -193,6 +194,7 @@ def test_lob_pool_keeps_audited_rejection_out_of_shortlist(
         "_audit_candidate",
         lambda *_args: {
             "artifact_valid": True,
+            "evaluation_segment": "validation",
             "baseline_screen": {"screening_effective": False},
         },
     )
@@ -225,8 +227,8 @@ def test_lob_pool_does_not_rank_partial_candidate_set(
                 "pool_id": "partial-round",
                 "candidates": [str(first), str(second)],
                 "top_k": 1,
-            }
-        )
+            },
+        ),
     )
     scripts = tmp_path / "scripts"
     scripts.mkdir()
@@ -236,6 +238,7 @@ def test_lob_pool_does_not_rank_partial_candidate_set(
         "_audit_candidate",
         lambda *_args: {
             "artifact_valid": True,
+            "evaluation_segment": "validation",
             "baseline_screen": {"screening_effective": True},
         },
     )
@@ -262,8 +265,8 @@ def test_lob_pool_rejects_noncomparable_split(tmp_path: Path) -> None:
                 "pool_id": "round-02",
                 "candidates": [str(first), str(second)],
                 "top_k": 1,
-            }
-        )
+            },
+        ),
     )
     with pytest.raises(ValueError, match="same evaluation cell"):
         validate_lob_pool(pool)
@@ -287,11 +290,11 @@ def test_lob_pool_rejects_duplicate_identity_before_launch(
                 "pool_id": "duplicate-round",
                 "candidates": [str(first), str(second)],
                 "top_k": 2,
-            }
-        )
+            },
+        ),
     )
     launches = []
-    monkeypatch.setattr(lob_model_loop.subprocess, "run", lambda *args, **kwargs: launches.append(args))
+    monkeypatch.setattr(lob_model_loop.subprocess, "run", lambda *args, **_kwargs: launches.append(args))
     with pytest.raises(ValueError, match="duplicate candidate run ID"):
         run_lob_pool(pool=str(pool), qlib_python=sys.executable, research_root=str(tmp_path))
     assert launches == []
@@ -309,15 +312,15 @@ def test_lob_pool_audits_with_expanded_research_root(tmp_path: Path) -> None:
                 "pool_id": "expanded-root",
                 "candidates": [str(candidate)],
                 "top_k": 1,
-            }
-        )
+            },
+        ),
     )
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     (scripts / "run_lob_experiment.py").write_text("")
     (scripts / "audit_lob_candidate.py").write_text(
         "import json, os, sys\n"
-        "print(json.dumps({'artifact_valid': True, 'cwd': os.getcwd(), "
+        "print(json.dumps({'artifact_valid': True, 'evaluation_segment': 'validation', 'cwd': os.getcwd(), "
         "'args': sys.argv[1:], 'baseline_screen': {'screening_effective': True}}))\n",
     )
     result = run_lob_pool(
@@ -333,3 +336,49 @@ def test_lob_pool_audits_with_expanded_research_root(tmp_path: Path) -> None:
         "--source-spec",
         str(candidate),
     ]
+
+
+@pytest.mark.parametrize("segment", [None, "test", "legacy_test", "development_test", "sealed_final"])
+def test_ranking_rejects_every_non_validation_segment(tmp_path: Path, segment: str | None) -> None:
+    path, spec = _spec(tmp_path)
+    _publish_candidate(path, f1=0.99)
+    metrics_path = Path(spec["output_root"]) / _run_id(spec) / "metrics.json"
+    metrics = json.loads(metrics_path.read_text())
+    metrics["evaluation_segment"] = segment
+    metrics_path.write_text(json.dumps(metrics))
+    with pytest.raises(ValueError, match="validation"):
+        _load_candidate_result(spec, path)
+
+
+@pytest.mark.parametrize("segment", [None, "development_test", "sealed_final"])
+def test_pool_requires_validation_audit_not_just_validation_metrics(
+    tmp_path: Path,
+    segment: str | None,
+) -> None:
+    candidate, spec = _spec(tmp_path)
+    _publish_candidate(candidate, f1=0.99)
+    pool = tmp_path / "pool.json"
+    pool.write_text(
+        json.dumps(
+            {
+                "schema_version": "lob-challenger-pool/v1",
+                "pool_id": "audit-segment",
+                "candidates": [str(candidate)],
+                "top_k": 1,
+            },
+        ),
+    )
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "run_lob_experiment.py").write_text("")
+    audit = {
+        "artifact_valid": True,
+        "evaluation_segment": segment,
+        "baseline_screen": {"screening_effective": True},
+    }
+    (scripts / "audit_lob_candidate.py").write_text(
+        f"print({json.dumps(audit)!r})\n",
+    )
+    with pytest.raises(RuntimeError, match="failed"):
+        run_lob_pool(pool=str(pool), qlib_python=sys.executable, research_root=str(tmp_path))
+    assert not (Path(spec["output_root"]) / "challenger-pool-audit-segment.json").exists()
