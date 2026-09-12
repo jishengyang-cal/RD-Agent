@@ -17,6 +17,7 @@ from rdagent.log.server.security import (
     parse_competition,
     require_authentication,
     resolve_within,
+    serve_index,
     validate_scenario,
 )
 from rdagent.log.ui.conf import UI_SETTING
@@ -167,9 +168,7 @@ def test():
 
 @app.route("/", methods=["GET"])
 def index():
-    # return 'Hello, World!'
-    # return {k: [i["tag"] for i in v] for k, v in msgs_for_frontend.items()}
-    return send_from_directory(app.static_folder, "index.html")
+    return serve_index()
 
 
 @app.route("/<path:fn>", methods=["GET"])

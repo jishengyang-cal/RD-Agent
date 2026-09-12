@@ -1,4 +1,3 @@
-import hmac
 import logging
 import os
 import random
@@ -16,12 +15,9 @@ from flask import (
     Flask,
     Response,
     jsonify,
-    make_response,
-    redirect,
     request,
     send_file,
     send_from_directory,
-    url_for,
 )
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
@@ -31,6 +27,7 @@ from rdagent.log.server.security import (
     parse_competition,
     require_authentication,
     resolve_within,
+    serve_index,
     validate_scenario,
     validate_upload_filename,
 )
@@ -603,13 +600,7 @@ def test():
 
 @app.route("/", methods=["GET"])
 def index():
-    token = app.config.get("AUTH_TOKEN", "")
-    supplied_token = request.args.get("token", "")
-    if token and supplied_token and hmac.compare_digest(supplied_token, token):
-        response = make_response(redirect(url_for("index")))
-        response.set_cookie("rdagent_auth", token, httponly=True, samesite="Strict")
-        return response
-    return send_from_directory(app.static_folder, "index.html")
+    return serve_index()
 
 
 @app.route("/<path:fn>", methods=["GET"])
