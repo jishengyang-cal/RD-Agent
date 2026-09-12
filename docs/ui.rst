@@ -64,7 +64,7 @@ Install the frontend dependencies and build the static assets:
 .. code-block:: bash
 
     cd web
-    npm install
+    npm ci --ignore-scripts --no-audit --no-fund
     npm run build:flask
     cd ..
 
@@ -84,13 +84,14 @@ other machines.
 Remote access and authentication
 --------------------------------
 
-To access the Flask Web UI remotely, explicitly select a non-local address and
-configure a long, random authentication token:
+Keep this process-control UI bound to loopback. For remote access, use an
+operator-managed SSH tunnel rather than exposing the server publicly. Configure
+a long, random authentication token even when using the tunnel:
 
 .. code-block:: bash
 
     export UI_SERVER_AUTH_TOKEN='<a-long-random-token>'
-    rdagent server_ui --port 19899 --host 0.0.0.0
+    rdagent server_ui --port 19899 --host 127.0.0.1
 
 The server refuses to bind to a non-local address unless
 ``UI_SERVER_AUTH_TOKEN`` is set. Open the following URL once to establish an
@@ -98,7 +99,7 @@ authenticated browser session:
 
 .. code-block:: text
 
-    http://<server-host>:19899/?token=<a-long-random-token>
+    http://127.0.0.1:<forwarded-local-port>/?token=<a-long-random-token>
 
 The server redirects to ``/`` after storing the token in an HTTP-only,
 same-site cookie. API clients can supply the same token without using a cookie:
@@ -106,6 +107,16 @@ same-site cookie. API clients can supply the same token without using a cookie:
 .. code-block:: text
 
     Authorization: Bearer <a-long-random-token>
+
+Authentication is performed by the Flask backend. The retired, unused browser
+password component and its fixed AES key have been removed; browser-side
+password comparison is not an authentication boundary. Removing that source
+does not remove it from earlier Git commits.
+
+The current browser bootstrap still places the token in a URL and its cookie
+does not carry the ``Secure`` attribute. A redirect does not erase browser
+history or access logs. This is a remaining limitation, not a fully hardened
+remote login flow; do not expose it to an untrusted network.
 
 Put remotely accessible deployments behind an HTTPS reverse proxy. Avoid
 recording the initial token-bearing URL in proxy logs or sharing it through an
