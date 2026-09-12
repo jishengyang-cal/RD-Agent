@@ -26,6 +26,10 @@
 
 The local debug replay server reads traces beneath the existing `UI_TRACE_FOLDER`
 setting (default: `./git_ignore_folder/traces`), not a developer-specific directory.
+When `UI_SERVER_AUTH_TOKEN` is configured, debug replay uses the main server's
+Bearer-token or `rdagent_auth` cookie check before loading or returning traces.
+Without a configured token, local replay remains unauthenticated; its listener
+remains bound to `127.0.0.1`.
 
 ### 2. /control [POST]
 

@@ -15,12 +15,15 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from rdagent.log.server.security import (
     parse_competition,
+    require_authentication,
     resolve_within,
     validate_scenario,
 )
 from rdagent.log.ui.conf import UI_SETTING
 
 app = Flask(__name__, static_folder=UI_SETTING.static_path)
+app.config["AUTH_TOKEN"] = UI_SETTING.server_auth_token
+app.before_request(require_authentication)
 
 rdagent_processes = defaultdict()
 server_port = 19899

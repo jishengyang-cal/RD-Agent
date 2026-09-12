@@ -1,5 +1,24 @@
+import hmac
 import re
 from pathlib import Path
+
+from flask import Response, current_app, jsonify, request
+
+_PUBLIC_ENDPOINTS = {"favicon", "index", "server_static_files", "static"}
+
+
+def require_authentication() -> Response | tuple[Response, int] | None:
+    token = current_app.config.get("AUTH_TOKEN", "")
+    if not token or request.method == "OPTIONS" or request.endpoint in _PUBLIC_ENDPOINTS:
+        return None
+
+    authorization = request.headers.get("Authorization", "")
+    header_token = authorization.removeprefix("Bearer ") if authorization.startswith("Bearer ") else ""
+    provided_token = header_token or request.cookies.get("rdagent_auth", "")
+    if not provided_token or not hmac.compare_digest(provided_token, token):
+        return jsonify({"error": "Authentication required"}), 401
+    return None
+
 
 SCENARIO_TARGETS = {
     "Finance Data Building": "fin_factor",
