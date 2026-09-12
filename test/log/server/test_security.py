@@ -1,11 +1,12 @@
 from http import HTTPStatus
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
-
 import rdagent.log.server.app as server
 import rdagent.log.ui.storage as web_storage
+from rdagent.log.server import debug_app
 from rdagent.log.server.security import (
     parse_competition,
     resolve_within,
@@ -17,6 +18,20 @@ from rdagent.log.server.security import (
 class _Response:
     status_code = HTTPStatus.OK
     text = "ok"
+
+
+@pytest.mark.offline
+def test_debug_trace_uses_configured_folder(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    calls = []
+    monkeypatch.setattr(debug_app.UI_SETTING, "trace_folder", str(tmp_path / "traces"))
+    monkeypatch.setattr(
+        debug_app.threading,
+        "Thread",
+        lambda **kwargs: SimpleNamespace(start=lambda: calls.append(kwargs)),
+    )
+    response = debug_app.app.test_client().post("/upload", data={"scenario": "Finance Data Building"})
+    assert response.status_code == HTTPStatus.OK
+    assert calls[0]["args"][0] == (tmp_path / "traces" / "Finance Data Building").resolve()
 
 
 @pytest.mark.offline

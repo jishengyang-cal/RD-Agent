@@ -11,7 +11,7 @@
     "terminal.integrated.shell.linux": "/bin/bash"
   },
   "mounts": [
-    "source=/home/shared/RD-Agent/kaggle,target=/tmp/kaggle,type=bind,consistency=cached,readonly"
+    "source=${localEnv:RDAGENT_KAGGLE_DATA},target=/tmp/kaggle,type=bind,consistency=cached,readonly"
   ],
   "extensions": [
     "ms-python.python",

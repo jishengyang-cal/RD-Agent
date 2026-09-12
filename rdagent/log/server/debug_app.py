@@ -86,7 +86,7 @@ def upload_file():
     loop_n = request.form.get("loops")
     all_duration = request.form.get("all_duration")
 
-    log_folder_path = Path("/home/bowen/workspace/new_traces").absolute()
+    log_folder_path = Path(UI_SETTING.trace_folder).expanduser().resolve()
 
     if scenario == "Data Science":
         try:
