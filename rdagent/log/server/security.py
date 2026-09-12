@@ -2,7 +2,16 @@ import hmac
 import re
 from pathlib import Path
 
-from flask import Response, current_app, jsonify, make_response, redirect, request, send_from_directory, url_for
+from flask import (
+    Response,
+    current_app,
+    jsonify,
+    make_response,
+    redirect,
+    request,
+    send_from_directory,
+    url_for,
+)
 
 _PUBLIC_ENDPOINTS = {"favicon", "index", "server_static_files", "static"}
 
