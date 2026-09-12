@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
 from rdagent.app import lob_model_loop
 from rdagent.app.lob_model_loop import (
     HORIZONS_MS,

@@ -148,6 +148,8 @@ spec to another filename does not create a distinct candidate. The search
 surface is limited to model and training settings, with strict-L2 readiness
 required and sealed final windows, champion locks, and historical VAP excluded.
 
+Training fits model parameters; validation alone determines candidate ranking
+and baseline screening, with an independent audit required for every candidate.
 Existing validation candidate results are reused and audited again. Both
 metrics and the independent audit must declare ``evaluation_segment=validation``.
 Legacy test/development-test outputs remain diagnostic evidence, but cannot
