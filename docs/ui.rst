@@ -108,8 +108,14 @@ same-site cookie. API clients can supply the same token without using a cookie:
 
     Authorization: Bearer <a-long-random-token>
 
-Authentication is performed by the Flask backend. The retired, unused browser
-password component and its fixed AES key have been removed; browser-side
+Authentication is performed by the Flask backend. The main server and local
+debug replay server share this token check and browser cookie bootstrap.
+When a token is configured, unauthenticated replay requests cannot load traces,
+start reader threads, or retrieve trace content. Without a configured token,
+local access remains unauthenticated.
+
+The retired, unused browser password component and its fixed AES key have
+been removed; browser-side
 password comparison is not an authentication boundary. Removing that source
 does not remove it from earlier Git commits.
 

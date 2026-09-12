@@ -403,34 +403,9 @@ After that, open `http://127.0.0.1:19899` in your browser.
 
 ##### Web UI security and remote access
 
-The Flask backend listens on `127.0.0.1` by default. This keeps its process-control, upload, and trace APIs accessible only from the local machine. No authentication token is required while the server is bound to localhost.
-
-To access the Web UI from another machine, explicitly bind it to a non-local address and configure an authentication token:
-
-```sh
-export UI_SERVER_AUTH_TOKEN='<a-long-random-token>'
-rdagent server_ui --port 19899 --host 0.0.0.0
-```
-
-Then open the following URL once to establish an authenticated browser session:
-
-```text
-http://<server-host>:19899/?token=<a-long-random-token>
-```
-
-The server removes the token from the address bar by redirecting to `/` and stores it in an HTTP-only, same-site cookie. API clients can instead send it in the request header:
-
-```text
-Authorization: Bearer <a-long-random-token>
-```
-
-The server refuses to bind to a non-local address unless `UI_SERVER_AUTH_TOKEN` is set. When exposing it outside a trusted development machine, put it behind an HTTPS reverse proxy and avoid recording token-bearing query strings in proxy logs. The `--host` option controls the address when the server is started through the CLI; `UI_SERVER_HOST` is the corresponding default for direct use of the backend entry point.
-
-Cross-origin browser access is disabled by default. If the frontend and backend are served from different origins, configure an explicit JSON allowlist rather than enabling every origin:
-
-```sh
-export UI_CORS_ALLOWED_ORIGINS='["https://ui.example.com"]'
-```
+See the [UI security and remote-access guide](docs/ui.rst#remote-access-and-authentication)
+for SSH tunnel setup, server-backed authentication, cross-origin configuration,
+and the existing URL-token and cookie limitations.
 
 ##### Web UI storage and compatibility settings
 
