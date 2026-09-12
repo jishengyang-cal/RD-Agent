@@ -2,9 +2,19 @@ import hmac
 import re
 from pathlib import Path
 
-from flask import Response, current_app, jsonify, request
+from flask import Response, current_app, jsonify, make_response, redirect, request, send_from_directory, url_for
 
 _PUBLIC_ENDPOINTS = {"favicon", "index", "server_static_files", "static"}
+
+
+def serve_index() -> Response:
+    token = current_app.config.get("AUTH_TOKEN", "")
+    supplied_token = request.args.get("token", "")
+    if token and supplied_token and hmac.compare_digest(supplied_token, token):
+        response = make_response(redirect(url_for("index")))
+        response.set_cookie("rdagent_auth", token, httponly=True, samesite="Strict")
+        return response
+    return send_from_directory(current_app.static_folder, "index.html")
 
 
 def require_authentication() -> Response | tuple[Response, int] | None:

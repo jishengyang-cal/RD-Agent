@@ -1,5 +1,6 @@
 from collections import defaultdict
 from http import HTTPStatus
+from http.cookies import SimpleCookie
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,8 +21,8 @@ from rdagent.log.storage import FileStorage
 
 
 @pytest.mark.offline
-@pytest.mark.parametrize("credential", [None, "header", "cookie"])
-def test_debug_rejects_unauthenticated_replay_without_side_effects(monkeypatch, credential):
+@pytest.mark.parametrize("credential", [None, "header", "cookie", "bootstrap"])
+def test_debug_rejects_unauthenticated_replay_without_side_effects(monkeypatch, tmp_path, credential):
     monkeypatch.setitem(debug_app.app.config, "AUTH_TOKEN", "fixture-token")
     messages = defaultdict(list, {"fixture": [{"tag": "fixture", "content": "private"}]})
     pointers = defaultdict(int, {"fixture": 0})
@@ -35,6 +36,11 @@ def test_debug_rejects_unauthenticated_replay_without_side_effects(monkeypatch, 
     monkeypatch.setattr(debug_app.threading, "Thread", forbidden)
     monkeypatch.setattr(FileStorage, "iter_msg", forbidden)
     client = debug_app.app.test_client()
+    (tmp_path / "index.html").write_text("synthetic public shell")
+    monkeypatch.setattr(debug_app.app, "static_folder", str(tmp_path))
+    entry = client.get("/", query_string={"token": "wrong-token"} if credential == "bootstrap" else {})
+    assert entry.status_code == HTTPStatus.OK
+    assert "Set-Cookie" not in entry.headers
     headers = {"Authorization": "Bearer wrong-token"} if credential == "header" else {}
     if credential == "cookie":
         client.set_cookie("rdagent_auth", "wrong-token")
@@ -76,7 +82,12 @@ def test_debug_reads_authorized_synthetic_fixture(monkeypatch, tmp_path, credent
     client = debug_app.app.test_client()
     headers = {"Authorization": "Bearer fixture-token"} if credential == "header" else {}
     if credential == "cookie":
-        client.set_cookie("rdagent_auth", "fixture-token")
+        entry = client.get("/", query_string={"token": "fixture-token"})
+        assert entry.status_code == HTTPStatus.FOUND
+        assert entry.headers["Location"] == "/"
+        assert "Set-Cookie" in entry.headers
+        assert starts == []
+        assert not debug_app.msgs_for_frontend
     response = client.post("/upload", data={"scenario": "Finance Data Building"}, headers=headers)
     assert response.status_code == HTTPStatus.OK
     assert starts == [storage.path.resolve()]
@@ -99,11 +110,26 @@ def test_servers_share_cookie_and_public_route_contract(monkeypatch, application
     assert client.get("/").status_code == HTTPStatus.OK
     assert client.options("/trace").status_code == HTTPStatus.OK
     assert client.get("/test").status_code == HTTPStatus.UNAUTHORIZED
-    client.set_cookie("rdagent_auth", "fixture-token")
+    for supplied_token in ("", "wrong-token"):
+        response = client.get("/", query_string={"token": supplied_token})
+        assert response.status_code == HTTPStatus.OK
+        assert "Set-Cookie" not in response.headers
+        assert client.get("/test").status_code == HTTPStatus.UNAUTHORIZED
+    response = client.get("/", query_string={"token": "fixture-token"})
+    assert response.status_code == HTTPStatus.FOUND
+    assert response.headers["Location"] == "/"
+    cookie = SimpleCookie(response.headers["Set-Cookie"])["rdagent_auth"]
+    assert cookie["httponly"]
+    assert cookie["samesite"] == "Strict"
+    assert not cookie["secure"]
+    assert client.get(response.headers["Location"]).data == b"synthetic public shell"
     assert client.get("/test").status_code == HTTPStatus.OK
     assert client.get("/test", headers={"Authorization": "Bearer wrong-token"}).status_code == HTTPStatus.UNAUTHORIZED
     client.delete_cookie("rdagent_auth")
     monkeypatch.setitem(application.config, "AUTH_TOKEN", "")
+    response = client.get("/", query_string={"token": "fixture-token"})
+    assert response.status_code == HTTPStatus.OK
+    assert "Set-Cookie" not in response.headers
     assert client.get("/test").status_code == HTTPStatus.OK
 
 
