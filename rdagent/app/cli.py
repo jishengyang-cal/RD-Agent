@@ -94,14 +94,13 @@ def fin_model_cli(
     loop_n: int | None = None,
     all_duration: str | None = None,
     checkout: CheckoutOption = True,
-    lob_spec: str | None = None,
     lob_pool: str | None = None,
     qlib_python: str | None = None,
     research_root: str | None = None,
 ):
     fin_model(
         path=path, step_n=step_n, loop_n=loop_n, all_duration=all_duration,
-        checkout=checkout, lob_spec=lob_spec, lob_pool=lob_pool, qlib_python=qlib_python,
+        checkout=checkout, lob_pool=lob_pool, qlib_python=qlib_python,
         research_root=research_root,
     )
 

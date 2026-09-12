@@ -1,5 +1,7 @@
 import hashlib
 import json
+import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +15,6 @@ from rdagent.app.lob_model_loop import (
     validate_lob_pool,
     validate_lob_spec,
 )
-from rdagent.app.lob_pool_control import create_recovery_pool, inspect_lob_pool
 
 
 def _spec(tmp_path: Path) -> tuple[Path, dict[str, Any]]:
@@ -225,51 +226,54 @@ def test_lob_pool_rejects_noncomparable_split(tmp_path: Path) -> None:
         validate_lob_pool(pool)
 
 
-def test_pool_status_distinguishes_complete_incomplete_and_pending(tmp_path: Path) -> None:
-    first, first_value = _spec(tmp_path)
-    second = tmp_path / "candidate-2.json"
-    second_value = dict(first_value)
-    second_value["architecture"] = "mlp"
-    second_value["variant"] = "baseline"
-    second.write_text(json.dumps(second_value))
-    third = tmp_path / "candidate-3.json"
-    third_value = dict(first_value)
-    third_value["architecture"] = "lstm"
-    third_value["variant"] = "baseline"
-    third.write_text(json.dumps(third_value))
-    _publish_candidate(first, f1=0.4)
-    incomplete = Path(first_value["output_root"]) / f".incomplete-{_run_id(second_value)}"
-    incomplete.mkdir(parents=True)
-    pool = tmp_path / "status-pool.json"
-    pool.write_text(json.dumps({
-        "schema_version": "lob-challenger-pool/v1",
-        "pool_id": "status-round",
-        "candidates": [str(first), str(second), str(third)],
-        "top_k": 1,
-    }))
-    status = inspect_lob_pool(pool)
-    assert status["counts"] == {"complete": 1, "incomplete": 1, "pending": 1, "invalid": 0}
-    assert [candidate["state"] for candidate in status["candidates"]] == [
-        "complete",
-        "incomplete",
-        "pending",
-    ]
-
-
-def test_recovery_pool_keeps_full_comparison_cell_and_never_overwrites(tmp_path: Path) -> None:
-    first, _ = _spec(tmp_path)
+@pytest.mark.parametrize("copied", [False, True])
+def test_lob_pool_rejects_duplicate_identity_before_launch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, copied: bool,
+) -> None:
+    first, value = _spec(tmp_path)
+    second = tmp_path / "copied-spec.json" if copied else first
+    second.write_text(json.dumps(value, indent=2, sort_keys=True))
     pool = tmp_path / "pool.json"
     pool.write_text(json.dumps({
         "schema_version": "lob-challenger-pool/v1",
-        "pool_id": "failed-round",
-        "candidates": [str(first)],
+        "pool_id": "duplicate-round",
+        "candidates": [str(first), str(second)],
+        "top_k": 2,
+    }))
+    launches = []
+    monkeypatch.setattr(lob_model_loop.subprocess, "run", lambda *args, **kwargs: launches.append(args))
+    with pytest.raises(ValueError, match="duplicate candidate run ID"):
+        run_lob_pool(pool=str(pool), qlib_python=sys.executable, research_root=str(tmp_path))
+    assert launches == []
+    assert not Path(value["output_root"]).exists()
+
+
+def test_lob_pool_audits_with_expanded_research_root(tmp_path: Path) -> None:
+    candidate, _ = _spec(tmp_path)
+    _publish_candidate(candidate, f1=0.6)
+    pool = tmp_path / "pool.json"
+    pool.write_text(json.dumps({
+        "schema_version": "lob-challenger-pool/v1",
+        "pool_id": "expanded-root",
+        "candidates": [str(candidate)],
         "top_k": 1,
     }))
-    recovery = tmp_path / "recovery.json"
-    result = create_recovery_pool(pool, recovery, pool_id="failed-round-recovery")
-    definition, candidates = validate_lob_pool(recovery)
-    assert result["status"] == "complete"
-    assert definition["pool_id"] == "failed-round-recovery"
-    assert len(candidates) == 1
-    with pytest.raises(FileExistsError, match="never overwrites"):
-        create_recovery_pool(pool, recovery, pool_id="another-recovery")
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "run_lob_experiment.py").write_text("")
+    (scripts / "audit_lob_candidate.py").write_text(
+        "import json, os, sys\n"
+        "print(json.dumps({'artifact_valid': True, 'cwd': os.getcwd(), "
+        "'args': sys.argv[1:], 'baseline_screen': {'screening_effective': True}}))\n",
+    )
+    result = run_lob_pool(
+        pool=str(pool), qlib_python=sys.executable,
+        research_root="~/" + os.path.relpath(tmp_path, Path.home()),
+    )
+    registry = json.loads(Path(result["registry"]).read_text())
+    audit = registry["shortlist"][0]["audit"]
+    assert audit["cwd"] == str(tmp_path.resolve())
+    assert audit["args"] == [
+        str(tmp_path / "runs" / registry["shortlist"][0]["run_id"]),
+        "--source-spec", str(candidate),
+    ]
