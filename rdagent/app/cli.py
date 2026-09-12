@@ -6,7 +6,6 @@ This will
 - autoamtically load dotenv
 """
 
-
 from dotenv import load_dotenv
 
 load_dotenv(".env")
@@ -18,6 +17,7 @@ from importlib.resources import path as rpath
 from typing import Annotated
 
 import typer
+
 from rdagent.app.data_science.loop import main as data_science
 from rdagent.app.finetune.llm.loop import main as llm_finetune
 from rdagent.app.general_model.general_model import (
@@ -99,8 +99,13 @@ def fin_model_cli(
     research_root: str | None = None,
 ):
     fin_model(
-        path=path, step_n=step_n, loop_n=loop_n, all_duration=all_duration,
-        checkout=checkout, lob_pool=lob_pool, qlib_python=qlib_python,
+        path=path,
+        step_n=step_n,
+        loop_n=loop_n,
+        all_duration=all_duration,
+        checkout=checkout,
+        lob_pool=lob_pool,
+        qlib_python=qlib_python,
         research_root=research_root,
     )
 

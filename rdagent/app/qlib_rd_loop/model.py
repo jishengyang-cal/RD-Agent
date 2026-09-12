@@ -5,6 +5,7 @@ Model workflow with session control
 import asyncio
 
 import fire
+
 from rdagent.app.qlib_rd_loop.conf import MODEL_PROP_SETTING
 from rdagent.components.workflow.rd_loop import RDLoop
 from rdagent.core.exception import ModelEmptyError

@@ -32,27 +32,54 @@ ALLOWED_ARCHITECTURES = {
     "wide_tlob",
 }
 ALLOWED_TOP_LEVEL = {
-    "schema_version", "readiness_path", "window", "architecture", "variant",
-    "segments", "seed", "dataset", "model", "output_root", "strict_l2_only",
+    "schema_version",
+    "readiness_path",
+    "window",
+    "architecture",
+    "variant",
+    "segments",
+    "seed",
+    "dataset",
+    "model",
+    "output_root",
+    "strict_l2_only",
     "use_historical_vap",
     "champion_lock",
 }
 ALLOWED_DATASET = {"context", "medium_context", "history_days", "stride"}
 ALLOWED_MODEL = {
-    "kwargs", "learning_rate", "epochs", "batch_size", "device", "early_stop",
-    "gradient_clip", "num_workers", "prefetch_factor", "direction_loss_weight",
+    "kwargs",
+    "learning_rate",
+    "epochs",
+    "batch_size",
+    "device",
+    "early_stop",
+    "gradient_clip",
+    "num_workers",
+    "prefetch_factor",
+    "direction_loss_weight",
 }
 ARCHITECTURE_KWARGS = {
     "mlp": {"hidden", "use_symbol_embedding"},
     "lstm": {"hidden", "use_symbol_embedding"},
     "deeplob": {"hidden", "use_symbol_embedding", "patch_count"},
     "wide_tlob": {
-        "side_dim", "heads", "spatial_layers", "temporal_layers", "dropout",
-        "use_symbol_embedding", "spatial_latents",
+        "side_dim",
+        "heads",
+        "spatial_layers",
+        "temporal_layers",
+        "dropout",
+        "use_symbol_embedding",
+        "spatial_latents",
     },
     "siamese_tlob": {
-        "side_dim", "heads", "spatial_layers", "temporal_layers", "dropout",
-        "use_symbol_embedding", "spatial_latents",
+        "side_dim",
+        "heads",
+        "spatial_layers",
+        "temporal_layers",
+        "dropout",
+        "use_symbol_embedding",
+        "spatial_latents",
     },
 }
 
@@ -120,15 +147,21 @@ def _runner(qlib_python: str, research_root: str) -> tuple[Path, Path]:
 
 
 def _audit_candidate(
-    python: Path, research_root: Path, run_root: Path, spec_path: Path,
+    python: Path,
+    research_root: Path,
+    run_root: Path,
+    spec_path: Path,
 ) -> dict[str, object]:
     audit_script = research_root.resolve(strict=True) / "scripts" / "audit_lob_candidate.py"
     if not audit_script.is_file():
         raise FileNotFoundError("Research LOB candidate auditor is missing")
     completed = subprocess.run(
         [
-            str(python), str(audit_script), str(run_root),
-            "--source-spec", str(spec_path),
+            str(python),
+            str(audit_script),
+            str(run_root),
+            "--source-spec",
+            str(spec_path),
         ],
         cwd=research_root,
         check=True,
@@ -157,17 +190,18 @@ def _load_candidate_result(spec: dict[str, object], spec_path: Path) -> dict[str
     if published_spec != spec:
         raise ValueError("published LOB candidate spec differs from its requested spec")
     implementation = json.loads(required["implementation"].read_text(encoding="utf-8"))
-    if (
-        not isinstance(implementation, dict)
-        or implementation.get("schema_version")
-        not in {"lob-implementation/v1", "lob-implementation/v2"}
-    ):
+    if not isinstance(implementation, dict) or implementation.get("schema_version") not in {
+        "lob-implementation/v1",
+        "lob-implementation/v2",
+    }:
         raise ValueError("LOB candidate implementation manifest is invalid")
     recorded_implementation_sha = implementation.get("sha256")
     unsigned_implementation = dict(implementation)
     unsigned_implementation.pop("sha256", None)
     canonical = json.dumps(
-        unsigned_implementation, sort_keys=True, separators=(",", ":"),
+        unsigned_implementation,
+        sort_keys=True,
+        separators=(",", ":"),
     ).encode()
     if recorded_implementation_sha != hashlib.sha256(canonical).hexdigest():
         raise ValueError("LOB candidate implementation digest mismatch")
@@ -199,9 +233,7 @@ def _ranking_metrics(metrics: object) -> dict[str, float]:
     result = {}
     for name, values in groups.items():
         if any(
-            isinstance(value, bool)
-            or not isinstance(value, (int, float))
-            or not math.isfinite(value)
+            isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
             for value in values
         ):
             raise ValueError(f"LOB candidate lacks finite ranking metric {name}")
@@ -249,10 +281,7 @@ def validate_lob_pool(path: str | Path) -> tuple[dict[str, object], list[tuple[P
         if run_id in seen:
             raise ValueError("LOB challenger pool contains a duplicate candidate run ID")
         seen.add(run_id)
-        immutable = {
-            name: spec[name]
-            for name in ("readiness_path", "window", "segments", "output_root")
-        }
+        immutable = {name: spec[name] for name in ("readiness_path", "window", "segments", "output_root")}
         canonical = json.dumps(immutable, sort_keys=True, separators=(",", ":"))
         if comparison is None:
             comparison = canonical
@@ -289,15 +318,20 @@ def run_lob_pool(*, pool: str, qlib_python: str, research_root: str) -> dict[str
                 )
             result = _load_candidate_result(spec, candidate_path)
             result["audit"] = _audit_candidate(
-                python, runner.parent.parent, run_root, candidate_path,
+                python,
+                runner.parent.parent,
+                run_root,
+                candidate_path,
             )
             completed.append(result)
         except (OSError, ValueError, subprocess.CalledProcessError) as exc:
-            failures.append({
-                "source_spec": str(candidate_path),
-                "source_spec_sha256": _sha256(candidate_path),
-                "error_type": type(exc).__name__,
-            })
+            failures.append(
+                {
+                    "source_spec": str(candidate_path),
+                    "source_spec_sha256": _sha256(candidate_path),
+                    "error_type": type(exc).__name__,
+                }
+            )
     if not completed:
         raise RuntimeError("all LOB challenger candidates failed")
     if failures:
@@ -306,7 +340,8 @@ def run_lob_pool(*, pool: str, qlib_python: str, research_root: str) -> dict[str
         )
     ranked = sorted(completed, key=_ranking_key)
     effective = [
-        candidate for candidate in ranked
+        candidate
+        for candidate in ranked
         if candidate["audit"].get("baseline_screen", {}).get("screening_effective") is True
     ]
     for rank, candidate in enumerate(ranked, start=1):
@@ -315,8 +350,7 @@ def run_lob_pool(*, pool: str, qlib_python: str, research_root: str) -> dict[str
         "schema_version": "lob-challenger-registry/v1",
         "pool_id": definition["pool_id"],
         "ranking_rule": (
-            "maximize mean multi-horizon macro-F1, then minimize mean up-Brier, "
-            "then minimize mean tick-MAE"
+            "maximize mean multi-horizon macro-F1, then minimize mean up-Brier, " "then minimize mean tick-MAE"
         ),
         "candidate_count": len(candidates),
         "completed_count": len(ranked),
