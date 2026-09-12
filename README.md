@@ -283,6 +283,8 @@ The **[🖥️ Live Demo](https://rdagent.azurewebsites.net/)** is implemented b
   rdagent fin_model
   ```
 
+  For prepared strict-L2 candidate pools, see the [finance-model guide](docs/scens/model_agent_fin.rst#strict-l2-candidate-pools).
+
 - Run the **Automated Quantitative Trading & Factors Extraction from Financial Reports**:  Run the [Qlib](http://github.com/microsoft/qlib) factor extraction and implementation application based on financial reports
   ```sh
   # 1. Generally, you can run this scenario using the following command:
