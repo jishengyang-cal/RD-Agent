@@ -119,28 +119,6 @@ def _runner(qlib_python: str, research_root: str) -> tuple[Path, Path]:
     return python, runner
 
 
-def run_lob_spec(*, spec: str, qlib_python: str, research_root: str) -> dict[str, object]:
-    value = validate_lob_spec(spec)
-    python, runner = _runner(qlib_python, research_root)
-    subprocess.run(
-        [
-            str(python),
-            str(runner),
-            "--spec",
-            str(Path(spec).resolve()),
-            "--resume-incomplete",
-        ],
-        cwd=runner.parent.parent,
-        check=True,
-    )
-    result = _load_candidate_result(value, Path(spec).resolve())
-    result["audit"] = _audit_candidate(
-        python, Path(research_root), Path(str(value["output_root"])) / result["run_id"],
-        Path(spec).resolve(),
-    )
-    return result
-
-
 def _audit_candidate(
     python: Path, research_root: Path, run_root: Path, spec_path: Path,
 ) -> dict[str, object]:
@@ -266,10 +244,11 @@ def validate_lob_pool(path: str | Path) -> tuple[dict[str, object], list[tuple[P
     comparison = None
     for candidate in candidates:
         candidate_path = Path(candidate).expanduser().resolve(strict=True)
-        if candidate_path in seen:
-            raise ValueError("LOB challenger pool contains a duplicate candidate")
-        seen.add(candidate_path)
         spec = validate_lob_spec(candidate_path)
+        run_id = _run_id(spec)
+        if run_id in seen:
+            raise ValueError("LOB challenger pool contains a duplicate candidate run ID")
+        seen.add(run_id)
         immutable = {
             name: spec[name]
             for name in ("readiness_path", "window", "segments", "output_root")
@@ -310,7 +289,7 @@ def run_lob_pool(*, pool: str, qlib_python: str, research_root: str) -> dict[str
                 )
             result = _load_candidate_result(spec, candidate_path)
             result["audit"] = _audit_candidate(
-                python, Path(research_root), run_root, candidate_path,
+                python, runner.parent.parent, run_root, candidate_path,
             )
             completed.append(result)
         except (OSError, ValueError, subprocess.CalledProcessError) as exc:
