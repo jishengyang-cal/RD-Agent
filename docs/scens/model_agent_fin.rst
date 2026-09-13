@@ -118,7 +118,7 @@ You can try our demo by running the following command:
         rdagent fin_model
 
 Strict-L2 candidate pools
-~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 For a prepared strict-L2 research pool, ``fin_model`` can launch candidates
 and require a complete artifact audit of every candidate before publishing
