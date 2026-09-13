@@ -80,50 +80,37 @@ readiness.write_text(
         )
     )
 )
-candidates = []
-for seed in [7, 8]:
-    path = root / f"spec-{seed}.json"
-    path.write_text(
-        json.dumps(
-            dict(
-                schema_version="lob-experiment-spec/v1",
-                readiness_path=str(readiness),
-                window=dict(name="synthetic-live", sealed_final=False),
-                architecture="mlp",
-                variant="shared",
-                segments={
-                    key: dict(dates=[date], symbols=["TEST"])
-                    for key, date in zip(["train", "valid", "test"], dates)
-                },
-                seed=seed,
-                dataset=dict(context=4, medium_context=1, history_days=1, stride=20),
-                model=dict(
-                    kwargs=dict(hidden=8),
-                    learning_rate=0.001,
-                    epochs=1,
-                    batch_size=4,
-                    device="cpu",
-                    early_stop=1,
-                    gradient_clip=3.0,
-                    num_workers=0,
-                    prefetch_factor=2,
-                    direction_loss_weight=0.25,
-                ),
-                output_root=str(root / "runs"),
-                strict_l2_only=True,
-                use_historical_vap=False,
-                champion_lock=None,
-            )
-        )
-    )
-    candidates.append(str(path))
-(root / "pool.json").write_text(
+path = root / "spec-7.json"
+path.write_text(
     json.dumps(
         dict(
-            schema_version="lob-challenger-pool/v1",
-            pool_id="synthetic-live",
-            candidates=candidates,
-            top_k=2,
+            schema_version="lob-experiment-spec/v1",
+            readiness_path=str(readiness),
+            window=dict(name="synthetic-live", sealed_final=False),
+            architecture="mlp",
+            variant="shared",
+            segments={
+                key: dict(dates=[date], symbols=["TEST"])
+                for key, date in zip(["train", "valid", "test"], dates)
+            },
+            seed=7,
+            dataset=dict(context=4, medium_context=1, history_days=1, stride=20),
+            model=dict(
+                kwargs=dict(hidden=8),
+                learning_rate=0.001,
+                epochs=1,
+                batch_size=4,
+                device="cpu",
+                early_stop=1,
+                gradient_clip=3.0,
+                num_workers=0,
+                prefetch_factor=2,
+                direction_loss_weight=0.25,
+            ),
+            output_root=str(root / "runs"),
+            strict_l2_only=True,
+            use_historical_vap=False,
+            champion_lock=None,
         )
     )
 )

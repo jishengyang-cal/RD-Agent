@@ -319,4 +319,9 @@ report = {
 }
 with (ROOT / f"{stage}-result.json").open("x") as stream:
     json.dump(report, stream, indent=2, sort_keys=True)
-print(json.dumps(report, indent=2))
+console_report = json.loads(json.dumps(report))
+for trials in console_report["studies"].values():
+    for trial in trials:
+        if "registry" in trial:
+            trial["registry"] = str(Path(trial["registry"]).relative_to(ROOT))
+print(json.dumps(console_report, indent=2))
