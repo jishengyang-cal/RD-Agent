@@ -22,9 +22,7 @@ root.chmod(0o700)
 research_root = Path(os.environ["RESEARCH_ROOT"]).resolve(strict=True)
 if importlib.metadata.version("optuna") != "4.8.0":
     raise RuntimeError("This software pilot was specified for Optuna 4.8.0")
-spec = importlib.util.spec_from_file_location(
-    "fixture", research_root / "tests/unit/lob/test_qlib_dataset.py"
-)
+spec = importlib.util.spec_from_file_location("fixture", research_root / "tests/unit/lob/test_qlib_dataset.py")
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 publications = []
@@ -44,9 +42,7 @@ for date in dates:
         with np.load(path) as archive:
             arrays = {name: archive[name] for name in archive.files}
         if "ts_recv" in arrays:
-            arrays["ts_recv"] += pd.Timestamp(
-                date + " 09:30:00", tz="America/New_York"
-            ).value
+            arrays["ts_recv"] += pd.Timestamp(date + " 09:30:00", tz="America/New_York").value
         if entry["role"] == "future_path_labels_fast":
             for name in arrays:
                 if name.startswith("delta_mid_ticks_"):
@@ -90,8 +86,7 @@ path.write_text(
             architecture="mlp",
             variant="shared",
             segments={
-                key: dict(dates=[date], symbols=["TEST"])
-                for key, date in zip(["train", "valid", "test"], dates)
+                key: dict(dates=[date], symbols=["TEST"]) for key, date in zip(["train", "valid", "test"], dates)
             },
             seed=7,
             dataset=dict(context=4, medium_context=1, history_days=1, stride=20),
@@ -127,18 +122,11 @@ contract = {
     ).strip(),
     "research_root": str(research_root),
     "qlib_python": str(Path(os.environ["QLIB_PYTHON"]).absolute()),
-    "versions": {
-        name: importlib.metadata.version(name)
-        for name in ["optuna", "mlflow", "pyqlib", "torch"]
-    },
+    "versions": {name: importlib.metadata.version(name) for name in ["optuna", "mlflow", "pyqlib", "torch"]},
     "base_spec_sha256": hashlib.sha256((root / "spec-7.json").read_bytes()).hexdigest(),
-    "driver_sha256": hashlib.sha256(
-        Path(__file__).with_name("run_lob_optuna_pilot.py").read_bytes()
-    ).hexdigest(),
+    "driver_sha256": hashlib.sha256(Path(__file__).with_name("run_lob_optuna_pilot.py").read_bytes()).hexdigest(),
     "budget": "two trials each for RandomSampler and TPE; one CPU update per candidate",
     "objective": "validation mean_direction_f1_macro; independent baseline gate unchanged",
     "limitations": "software fixture only; not performance, market efficacy, pruning, or a production scheduler",
 }
-(root / "preregistration.json").write_text(
-    json.dumps(contract, indent=2, sort_keys=True)
-)
+(root / "preregistration.json").write_text(json.dumps(contract, indent=2, sort_keys=True))

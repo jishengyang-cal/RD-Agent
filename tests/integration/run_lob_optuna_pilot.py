@@ -16,9 +16,7 @@ from optuna.trial import TrialState
 from rdagent.app.lob_model_loop import run_lob_pool, validate_lob_pool
 
 if not __debug__:
-    raise RuntimeError(
-        "This integration test requires Python assertions; do not use -O"
-    )
+    raise RuntimeError("This integration test requires Python assertions; do not use -O")
 
 ROOT = Path(os.environ["LOB_OPTUNA_PILOT_ROOT"]).expanduser().resolve(strict=True)
 # Hold one writer for the entire process; never take over another live pilot.
@@ -29,15 +27,9 @@ if FROZEN["synthetic_only"] is not True or optuna.__version__ != "4.8.0":
     raise ValueError("Expected the frozen synthetic Optuna 4.8.0 pilot")
 if hashlib.sha256(Path(__file__).read_bytes()).hexdigest() != FROZEN["driver_sha256"]:
     raise ValueError("Driver changed after preparation")
-if (
-    hashlib.sha256((ROOT / "spec-7.json").read_bytes()).hexdigest()
-    != FROZEN["base_spec_sha256"]
-):
+if hashlib.sha256((ROOT / "spec-7.json").read_bytes()).hexdigest() != FROZEN["base_spec_sha256"]:
     raise ValueError("Base specification changed")
-if (
-    str(Path(os.environ["RESEARCH_ROOT"]).resolve(strict=True))
-    != FROZEN["research_root"]
-):
+if str(Path(os.environ["RESEARCH_ROOT"]).resolve(strict=True)) != FROZEN["research_root"]:
     raise ValueError("Research checkout changed")
 if str(Path(os.environ["QLIB_PYTHON"]).absolute()) != FROZEN["qlib_python"]:
     raise ValueError("Training interpreter changed")
@@ -45,12 +37,7 @@ for key, path in [
     ("research_commit", FROZEN["research_root"]),
     ("rd_agent_commit", str(Path(__file__).resolve().parents[2])),
 ]:
-    if (
-        subprocess.check_output(
-            ["git", "-C", path, "rev-parse", "HEAD"], text=True
-        ).strip()
-        != FROZEN[key]
-    ):
+    if subprocess.check_output(["git", "-C", path, "rev-parse", "HEAD"], text=True).strip() != FROZEN[key]:
         raise ValueError("Source revision changed")
 for package, version in FROZEN["versions"].items():
     if importlib.metadata.version(package) != version:
@@ -133,10 +120,7 @@ def request(study, name):
 
 def verified_request(trial):
     bound = trial.user_attrs["request"]
-    if (
-        digest(bound["pool"]) != bound["pool_sha256"]
-        or digest(bound["spec"]) != bound["spec_sha256"]
-    ):
+    if digest(bound["pool"]) != bound["pool_sha256"] or digest(bound["spec"]) != bound["spec_sha256"]:
         raise ValueError("Requested candidate changed")
     _, candidates = validate_lob_pool(bound["pool"])
     spec = candidates[0][1]
@@ -168,10 +152,7 @@ def verify_result(study, trial):
     if trial.state == TrialState.COMPLETE:
         assert trial.value == value
     tracking_db = Path(spec["output_root"]) / "mlflow.db"
-    if (
-        not tracking_db.is_file()
-        or receipt["tracking_uri"] != f"sqlite:///{tracking_db}"
-    ):
+    if not tracking_db.is_file() or receipt["tracking_uri"] != f"sqlite:///{tracking_db}":
         raise ValueError("Expected the existing candidate tracking database")
     client = MlflowClient(tracking_uri=receipt["tracking_uri"])
     recorder = client.get_run(receipt["recorder_id"])
@@ -200,9 +181,7 @@ def execute(study, trial):
     if trial.state != TrialState.RUNNING:
         raise ValueError("Only a previously requested running trial may execute")
     if f"result_{trial.number}" in study.user_attrs:
-        raise ValueError(
-            "Result exists without final trial state; inspect before continuing"
-        )
+        raise ValueError("Result exists without final trial state; inspect before continuing")
     result = run_lob_pool(
         pool=bound["pool"],
         qlib_python=os.environ["QLIB_PYTHON"],
@@ -211,12 +190,7 @@ def execute(study, trial):
     )
     candidate = result["candidates"][0]
     context = json.loads(
-        (
-            Path(spec["output_root"])
-            / "tracking"
-            / candidate["run_id"]
-            / "tracking-context.json"
-        ).read_text()
+        (Path(spec["output_root"]) / "tracking" / candidate["run_id"] / "tracking-context.json").read_text()
     )["attempts"][-1]
     assert context["spec_sha256"] == bound["spec_sha256"]
     assert context["run_id"] == candidate["run_id"]
@@ -243,12 +217,8 @@ def execute(study, trial):
             stream,
             sort_keys=True,
         )
-    client.log_artifact(
-        context["recorder_id"], str(reference), artifact_path="optuna-trials"
-    )
-    downloaded = client.download_artifacts(
-        context["recorder_id"], f"optuna-trials/{reference.name}"
-    )
+    client.log_artifact(context["recorder_id"], str(reference), artifact_path="optuna-trials")
+    downloaded = client.download_artifacts(context["recorder_id"], f"optuna-trials/{reference.name}")
     assert digest(downloaded) == digest(reference)
     for key, value in {
         "optuna.study_name": study.study_name,
@@ -275,9 +245,7 @@ stage = parser.parse_args().stage
 if stage != "first" and not (ROOT / "optuna.db").is_file():
     raise ValueError("Existing Optuna database required; recovery never creates one")
 if (ROOT / f"{stage}-result.json").exists():
-    raise ValueError(
-        "Stage receipt already exists; preserve it and inspect the completed result"
-    )
+    raise ValueError("Stage receipt already exists; preserve it and inspect the completed result")
 summaries = {}
 for name in ("random", "tpe"):
     study = study_for(name)
@@ -286,9 +254,7 @@ for name in ("random", "tpe"):
             raise ValueError("First stage requires an empty study")
         number = request(study, name)
         execute(study, study.get_trials()[number])
-        request(
-            study, name
-        )  # Persist the next request, then leave execution for a new process.
+        request(study, name)  # Persist the next request, then leave execution for a new process.
     elif stage == "resume":
         if len(study.trials) != 2:
             raise ValueError("Expected the fixed requested trial set")
@@ -306,9 +272,7 @@ for name in ("random", "tpe"):
         for trial in study.get_trials()
     ]
     if stage == "verify":
-        assert len(study.trials) == 2 and all(
-            t.state == TrialState.COMPLETE for t in study.trials
-        )
+        assert len(study.trials) == 2 and all(t.state == TrialState.COMPLETE for t in study.trials)
 report = {
     "synthetic_only": True,
     "stage": stage,
