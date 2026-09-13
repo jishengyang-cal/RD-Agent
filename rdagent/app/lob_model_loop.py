@@ -216,6 +216,7 @@ def _load_candidate_result(spec: dict[str, object], spec_path: Path) -> dict[str
     if not isinstance(implementation, dict) or implementation.get("schema_version") not in {
         "lob-implementation/v1",
         "lob-implementation/v2",
+        "lob-implementation/v3",
     }:
         raise ValueError("LOB candidate implementation manifest is invalid")
     recorded_implementation_sha = implementation.get("sha256")
