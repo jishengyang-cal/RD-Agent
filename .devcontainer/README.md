@@ -8,7 +8,7 @@
 Prerequisites(this is the reason why this dev container is not for public use):
 
 - Make sure you have the `rdagentappregistry.azurecr.io/rd-agent-mle:20250623` image locally & DevContainer is installed in your IDE
-- The kaggle dataset is located at `/home/shared/RD-Agent/kaggle`
+- Set `RDAGENT_KAGGLE_DATA` in the host environment to the absolute path of your existing Kaggle dataset before reopening the container.
 
 1. Open the project and select "Open In DevContainer"
 2. Set up your Kaggle Key (do not share this; other internal URLs are hardcoded in the config files)

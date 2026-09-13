@@ -188,3 +188,7 @@ AGENTS.md
 !rdagent/**/AGENTS.md
 
 scripts/
+
+# Keep repository AI documentation entrypoints portable.
+!/CLAUDE.md
+!/AGENTS.md
