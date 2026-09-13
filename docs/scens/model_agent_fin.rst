@@ -139,6 +139,12 @@ and are invalid without ``--lob-pool``. Do not combine pool mode with
 ``--path``, ``--step-n``, ``--loop-n``, or ``--all-duration``; it does not run
 the generic model evolution/session loop.
 
+For the optional ``--lob-tracking-uri`` audit binding and the read-only
+``inspect_lob_pool`` API, see the central
+`MLflow workflow <../../../../../docs/modules/strategy/mlflow-development-workflow.md#12-持续推进进度候选查询与-agent-接线>`_.
+The central documentation root is located as described in ``AGENTS.override.md``
+when using an isolated checkout.
+
 Prepare the pool definition and candidate specs according to
 ``validate_lob_pool`` and ``validate_lob_spec`` in
 ``rdagent/app/lob_model_loop.py``, the authoritative input contracts.

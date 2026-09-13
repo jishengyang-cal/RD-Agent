@@ -6,6 +6,7 @@ import asyncio
 from typing import Any
 
 import fire
+
 from rdagent.app.lob_model_loop import run_lob_pool
 from rdagent.app.qlib_rd_loop.conf import MODEL_PROP_SETTING
 from rdagent.components.workflow.rd_loop import RDLoop
@@ -51,8 +52,12 @@ def main(
             message = "LOB mode requires qlib_python and research_root"
             raise ValueError(message)
 
-        run_lob_pool(pool=lob_pool, qlib_python=qlib_python, research_root=research_root,
-                     **({"tracking_uri": lob_tracking_uri} if lob_tracking_uri is not None else {}))
+        run_lob_pool(
+            pool=lob_pool,
+            qlib_python=qlib_python,
+            research_root=research_root,
+            **({"tracking_uri": lob_tracking_uri} if lob_tracking_uri is not None else {}),
+        )
         return
     if qlib_python is not None or research_root is not None or lob_tracking_uri is not None:
         message = "qlib_python/research_root/lob_tracking_uri are only valid with a LOB pool"

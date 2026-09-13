@@ -53,10 +53,15 @@ class LiteLLMAPIBackend(APIBackend):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         if not self.__class__._has_logged_settings:
             # Both console and persisted objects must exclude credential settings.
-            public_settings = LITELLM_SETTINGS.model_dump(include={
-                "chat_model", "embedding_model", "reasoning_effort",
-                "chat_stream", "enable_response_schema",
-            })
+            public_settings = LITELLM_SETTINGS.model_dump(
+                include={
+                    "chat_model",
+                    "embedding_model",
+                    "reasoning_effort",
+                    "chat_stream",
+                    "enable_response_schema",
+                }
+            )
             logger.info(f"{public_settings}")
             logger.log_object(public_settings, tag="LITELLM_SETTINGS")
             self.__class__._has_logged_settings = True
