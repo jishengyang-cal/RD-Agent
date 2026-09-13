@@ -58,22 +58,49 @@ def test_public_fin_model_forwards_lob_options(public_cli, tracking_uri):
         args.extend(["--lob-tracking-uri", tracking_uri])
     result = CliRunner().invoke(app, args)
     assert result.exit_code == 0, result.output
-    assert calls == [{
-        "path": None, "step_n": None, "loop_n": None, "all_duration": None,
-        "checkout": True, "lob_pool": "pool.json", "qlib_python": "python",
-        "research_root": "research", "lob_tracking_uri": tracking_uri,
-    }]
+    assert calls == [
+        {
+            "path": None,
+            "step_n": None,
+            "loop_n": None,
+            "all_duration": None,
+            "checkout": True,
+            "lob_pool": "pool.json",
+            "qlib_python": "python",
+            "research_root": "research",
+            "lob_tracking_uri": tracking_uri,
+        }
+    ]
 
 
 def test_public_fin_model_preserves_session_invocation(public_cli):
     app, calls = public_cli
-    result = CliRunner().invoke(app, [
-        "fin_model", "--path", "session", "--step-n", "2", "--loop-n", "3",
-        "--all-duration", "1h", "--no-checkout",
-    ])
+    result = CliRunner().invoke(
+        app,
+        [
+            "fin_model",
+            "--path",
+            "session",
+            "--step-n",
+            "2",
+            "--loop-n",
+            "3",
+            "--all-duration",
+            "1h",
+            "--no-checkout",
+        ],
+    )
     assert result.exit_code == 0, result.output
-    assert calls == [{
-        "path": "session", "step_n": 2, "loop_n": 3, "all_duration": "1h",
-        "checkout": False, "lob_pool": None, "qlib_python": None,
-        "research_root": None, "lob_tracking_uri": None,
-    }]
+    assert calls == [
+        {
+            "path": "session",
+            "step_n": 2,
+            "loop_n": 3,
+            "all_duration": "1h",
+            "checkout": False,
+            "lob_pool": None,
+            "qlib_python": None,
+            "research_root": None,
+            "lob_tracking_uri": None,
+        }
+    ]

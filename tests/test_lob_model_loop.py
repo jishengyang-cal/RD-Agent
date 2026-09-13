@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+
 from rdagent.app import lob_model_loop
 from rdagent.app.lob_model_loop import (
     HORIZONS_MS,
@@ -74,7 +75,8 @@ def test_lob_spec_accepts_only_model_training_surface(tmp_path: Path) -> None:
 
 
 def test_pool_observation_keeps_five_candidates_attempts_and_missing_records(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _, spec = _spec(tmp_path)
     paths = []
@@ -84,8 +86,16 @@ def test_pool_observation_keeps_five_candidates_attempts_and_missing_records(
         path.write_text(json.dumps(value))
         paths.append(str(path))
     pool = tmp_path / "pool.json"
-    pool.write_text(json.dumps({"schema_version": lob_model_loop.LOB_POOL_SCHEMA,
-        "pool_id": "observation", "candidates": paths, "top_k": 1}))
+    pool.write_text(
+        json.dumps(
+            {
+                "schema_version": lob_model_loop.LOB_POOL_SCHEMA,
+                "pool_id": "observation",
+                "candidates": paths,
+                "top_k": 1,
+            }
+        )
+    )
     queries = []
 
     class Page(list):
@@ -100,13 +110,23 @@ def test_pool_observation_keeps_five_candidates_attempts_and_missing_records(
                 return Page()
             resumed = kwargs["page_token"] is not None
             run = SimpleNamespace(
-                info=SimpleNamespace(run_id="attempt-2" if resumed else "attempt-1",
-                    experiment_id="1", status="FINISHED" if resumed else "FAILED",
-                    start_time=2 if resumed else 1, end_time=3),
-                data=SimpleNamespace(params={"run_id": _run_id(value),
-                    "spec_sha256": "wrong" if resumed else _sha256(path),
-                    "architecture": value["architecture"], "sealed_final": "False"},
-                    metrics={"epoch_train_loss": 1.}, tags={"audit.screen_status": "rejected"}),
+                info=SimpleNamespace(
+                    run_id="attempt-2" if resumed else "attempt-1",
+                    experiment_id="1",
+                    status="FINISHED" if resumed else "FAILED",
+                    start_time=2 if resumed else 1,
+                    end_time=3,
+                ),
+                data=SimpleNamespace(
+                    params={
+                        "run_id": _run_id(value),
+                        "spec_sha256": "wrong" if resumed else _sha256(path),
+                        "architecture": value["architecture"],
+                        "sealed_final": "False",
+                    },
+                    metrics={"epoch_train_loss": 1.0},
+                    tags={"audit.screen_status": "rejected"},
+                ),
             )
             page = Page([run])
             page.token = None if resumed else "next"
@@ -114,6 +134,7 @@ def test_pool_observation_keeps_five_candidates_attempts_and_missing_records(
 
     def forbid(*_args: Any, **_kwargs: Any) -> None:
         pytest.fail("observation must not launch training or audit subprocesses")
+
     monkeypatch.setattr(lob_model_loop.subprocess, "run", forbid)
     result = lob_model_loop.inspect_lob_pool(pool=str(pool), tracking_client=Client(), experiment_ids=["1"])
     assert result["candidate_count"] == len(paths)
@@ -135,8 +156,9 @@ def test_pool_observation_real_mlflow_roundtrip(tmp_path: Path) -> None:
 
     _, spec = _spec(tmp_path)
     client = tracking.MlflowClient(tracking_uri=f"sqlite:///{tmp_path / 'tracking.db'}")
-    experiment_id = client.create_experiment("synthetic-pool-observation",
-        artifact_location=(tmp_path / "artifacts").as_uri())
+    experiment_id = client.create_experiment(
+        "synthetic-pool-observation", artifact_location=(tmp_path / "artifacts").as_uri()
+    )
     paths = []
     recorded_count = 3
     for index, architecture in enumerate(sorted(lob_model_loop.ALLOWED_ARCHITECTURES)):
@@ -147,24 +169,42 @@ def test_pool_observation_real_mlflow_roundtrip(tmp_path: Path) -> None:
         if index >= recorded_count:
             continue
         run_id = client.create_run(experiment_id).info.run_id
-        for key, parameter in {"run_id": _run_id(value),
-            "spec_sha256": _sha256(path), "sealed_final": "False",
-            "architecture": architecture}.items():
+        for key, parameter in {
+            "run_id": _run_id(value),
+            "spec_sha256": _sha256(path),
+            "sealed_final": "False",
+            "architecture": architecture,
+        }.items():
             client.log_param(run_id, key, parameter)
         if index != 1:
             client.set_terminated(run_id, "FINISHED" if index == 0 else "FAILED")
         if index == 0:
             client.set_tag(run_id, "audit.screen_status", "rejected")
     pool = tmp_path / "pool.json"
-    pool.write_text(json.dumps({"schema_version": lob_model_loop.LOB_POOL_SCHEMA,
-        "pool_id": "sdk-observation", "candidates": paths, "top_k": 1}))
-    result = lob_model_loop.inspect_lob_pool(pool=str(pool), tracking_client=client,
-        experiment_ids=[experiment_id])
+    pool.write_text(
+        json.dumps(
+            {
+                "schema_version": lob_model_loop.LOB_POOL_SCHEMA,
+                "pool_id": "sdk-observation",
+                "candidates": paths,
+                "top_k": 1,
+            }
+        )
+    )
+    result = lob_model_loop.inspect_lob_pool(pool=str(pool), tracking_client=client, experiment_ids=[experiment_id])
     assert result["candidate_count"] == len(paths)
     assert [row["tracking_state"] for row in result["candidates"]] == [
-        "observed", "observed", "observed", "unknown", "unknown"]
+        "observed",
+        "observed",
+        "observed",
+        "unknown",
+        "unknown",
+    ]
     assert [row["attempts"][0]["execution_status"] for row in result["candidates"][:3]] == [
-        "FINISHED", "RUNNING", "FAILED"]
+        "FINISHED",
+        "RUNNING",
+        "FAILED",
+    ]
     assert result["candidates"][0]["attempts"][0]["recorded_summary"]["audit.screen_status"] == "rejected"
     assert all(row["attempts"][0]["identity_valid"] for row in result["candidates"][:3])
     assert len(client.search_runs([experiment_id])) == recorded_count
@@ -172,31 +212,47 @@ def test_pool_observation_real_mlflow_roundtrip(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("wrong_binding", [False, True])
 def test_audit_forwards_only_explicit_matching_recorder(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, wrong_binding: bool,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    wrong_binding: bool,
 ) -> None:
     spec_path, spec = _spec(tmp_path)
     run_root = Path(spec["output_root"]) / _run_id(spec)
     context = run_root.parent / "tracking" / run_root.name / "tracking-context.json"
     context.parent.mkdir(parents=True)
     uri = "sqlite:///synthetic-existing.db"
-    context.write_text(json.dumps({"schema_version": "lob-tracking-context/v1", "attempts": [{
-        "tracking_uri": uri, "run_id": run_root.name, "recorder_id": "synthetic-recorder",
-        "spec_sha256": "wrong" if wrong_binding else _sha256(spec_path)}]}))
+    context.write_text(
+        json.dumps(
+            {
+                "schema_version": "lob-tracking-context/v1",
+                "attempts": [
+                    {
+                        "tracking_uri": uri,
+                        "run_id": run_root.name,
+                        "recorder_id": "synthetic-recorder",
+                        "spec_sha256": "wrong" if wrong_binding else _sha256(spec_path),
+                    }
+                ],
+            }
+        )
+    )
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     (scripts / "audit_lob_candidate.py").write_text(
         "import json,sys\nprint(json.dumps({'artifact_valid': True, "
-        "'evaluation_segment':'validation', 'args':sys.argv[1:]}))\n")
+        "'evaluation_segment':'validation', 'args':sys.argv[1:]}))\n"
+    )
     if wrong_binding:
+
         def forbid(*_args: Any, **_kwargs: Any) -> None:
             pytest.fail("mismatched context must not launch the auditor")
+
         monkeypatch.setattr(lob_model_loop.subprocess, "run", forbid)
         with pytest.raises(ValueError, match="identity mismatch"):
-            _audit_candidate(Path(sys.executable), tmp_path, run_root, spec_path,
-                                            tracking_uri=uri)
+            _audit_candidate(Path(sys.executable), tmp_path, run_root, spec_path, tracking_uri=uri)
     else:
-        result = _audit_candidate(Path(sys.executable), tmp_path, run_root, spec_path,
-                                                tracking_uri=uri)
+        result = _audit_candidate(Path(sys.executable), tmp_path, run_root, spec_path, tracking_uri=uri)
         assert result["args"][-4:] == ["--tracking-uri", uri, "--recorder-id", "synthetic-recorder"]
 
 
@@ -213,10 +269,17 @@ def test_model_loop_forwards_tracking_only_for_lob_mode(monkeypatch: pytest.Monk
     assert module_spec.loader is not None
     module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(module)
-    module.main(lob_pool="pool.json", qlib_python="python", research_root="research",
-                      lob_tracking_uri="sqlite:///existing.db")
-    assert calls == [{"pool": "pool.json", "qlib_python": "python", "research_root": "research",
-                      "tracking_uri": "sqlite:///existing.db"}]
+    module.main(
+        lob_pool="pool.json", qlib_python="python", research_root="research", lob_tracking_uri="sqlite:///existing.db"
+    )
+    assert calls == [
+        {
+            "pool": "pool.json",
+            "qlib_python": "python",
+            "research_root": "research",
+            "tracking_uri": "sqlite:///existing.db",
+        }
+    ]
     with pytest.raises(ValueError, match="only valid with a LOB pool"):
         module.main(lob_tracking_uri="sqlite:///existing.db")
     for flag in ("help", "h"):

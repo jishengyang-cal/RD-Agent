@@ -32,9 +32,16 @@ def test_litellm_settings_logging_excludes_credentials(monkeypatch: pytest.Monke
     infos = []
     objects = []
     marker = "synthetic-private-value"
-    fields = {"chat_model": "fixture-model", "embedding_model": "fixture-embedding",
-              "reasoning_effort": None, "chat_stream": False, "enable_response_schema": True,
-              "openai_api_key": marker, "custom_endpoint_key": marker, "openai_api_base": marker}
+    fields = {
+        "chat_model": "fixture-model",
+        "embedding_model": "fixture-embedding",
+        "reasoning_effort": None,
+        "chat_stream": False,
+        "enable_response_schema": True,
+        "openai_api_key": marker,
+        "custom_endpoint_key": marker,
+        "openai_api_base": marker,
+    }
 
     class Settings:
         def model_dump(self, *, include: set[str] | None = None) -> dict[str, Any]:
@@ -44,8 +51,11 @@ def test_litellm_settings_logging_excludes_credentials(monkeypatch: pytest.Monke
             return marker
 
     monkeypatch.setattr(module, "LITELLM_SETTINGS", Settings())
-    monkeypatch.setattr(module, "logger", SimpleNamespace(
-        info=infos.append, log_object=lambda value, **kwargs: objects.append((value, kwargs))))
+    monkeypatch.setattr(
+        module,
+        "logger",
+        SimpleNamespace(info=infos.append, log_object=lambda value, **kwargs: objects.append((value, kwargs))),
+    )
     monkeypatch.setattr(module.APIBackend, "__init__", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(module.LiteLLMAPIBackend, "_has_logged_settings", False)
     module.LiteLLMAPIBackend()
