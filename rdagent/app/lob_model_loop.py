@@ -151,18 +151,38 @@ def _audit_candidate(
     research_root: Path,
     run_root: Path,
     spec_path: Path,
+    *, tracking_uri: str | None = None,
 ) -> dict[str, object]:
     audit_script = research_root.resolve(strict=True) / "scripts" / "audit_lob_candidate.py"
     if not audit_script.is_file():
         raise FileNotFoundError("Research LOB candidate auditor is missing")
-    completed = subprocess.run(
-        [
+    arguments = [
             str(python),
             str(audit_script),
             str(run_root),
             "--source-spec",
             str(spec_path),
-        ],
+        ]
+    if tracking_uri is not None:
+        context_path = run_root.parent / "tracking" / run_root.name / "tracking-context.json"
+        if any(path.is_symlink() for path in (context_path, context_path.parent, context_path.parent.parent)):
+            raise ValueError("tracking context must not be a symbolic link")
+        context = json.loads(context_path.read_text(encoding="utf-8"))
+        attempts = context.get("attempts")
+        if context.get("schema_version") != "lob-tracking-context/v1" or not isinstance(attempts, list) or not attempts:
+            raise ValueError("training Recorder context is missing or malformed")
+        attempt = attempts[-1]
+        if not isinstance(attempt, dict) or (
+            attempt.get("tracking_uri") != tracking_uri
+            or attempt.get("run_id") != run_root.name
+            or attempt.get("spec_sha256") != _sha256(spec_path)
+            or not isinstance(attempt.get("recorder_id"), str)
+            or not attempt["recorder_id"]
+        ):
+            raise ValueError("training Recorder context identity mismatch")
+        arguments.extend(["--tracking-uri", tracking_uri, "--recorder-id", attempt["recorder_id"]])
+    completed = subprocess.run(
+        arguments,
         cwd=research_root,
         check=True,
         capture_output=True,
@@ -296,7 +316,79 @@ def validate_lob_pool(path: str | Path) -> tuple[dict[str, object], list[tuple[P
     return pool, loaded
 
 
-def run_lob_pool(*, pool: str, qlib_python: str, research_root: str) -> dict[str, object]:
+def inspect_lob_pool(*, pool: str, tracking_client: Any, experiment_ids: list[str]) -> dict[str, object]:
+    """Observe all candidates via an existing MLflow client, without launching work.
+
+    The caller owns backend/credentials and explicitly selects experiments.
+    Recorded audit summaries are not a new audit or a promotion decision.
+    """
+    definition, candidates = validate_lob_pool(pool)
+    if not experiment_ids or any(not isinstance(value, str) or not value for value in experiment_ids):
+        raise ValueError("explicit nonempty experiment IDs are required")
+    observed = []
+    for spec_path, spec in candidates:
+        business_id = _run_id(spec)
+        spec_digest = _sha256(spec_path)
+        attempts = []
+        token = None
+        seen_tokens = set()
+        while True:
+            page = tracking_client.search_runs(
+                experiment_ids=experiment_ids,
+                filter_string=f"params.run_id = '{business_id}'",
+                order_by=["attributes.start_time ASC", "attributes.run_id ASC"],
+                max_results=100,
+                page_token=token,
+            )
+            for run in page:
+                identity_valid = (
+                    run.data.params.get("run_id") == business_id
+                    and run.data.params.get("spec_sha256") == spec_digest
+                    and run.data.params.get("architecture") == spec["architecture"]
+                    and run.data.params.get("sealed_final", "").lower() == "false"
+                )
+                attempts.append({
+                    "recorder_id": run.info.run_id,
+                    "experiment_id": run.info.experiment_id,
+                    "execution_status": run.info.status,
+                    "start_time": run.info.start_time,
+                    "end_time": run.info.end_time,
+                    "identity_valid": identity_valid,
+                    "recorded_metrics": dict(run.data.metrics) if identity_valid else {},
+                    "recorded_summary": {
+                        key: value for key, value in run.data.tags.items()
+                        if key.startswith("audit.") or key == "training_stage"
+                    } if identity_valid else {},
+                })
+            token = page.token
+            if not token:
+                break
+            if token in seen_tokens:
+                raise ValueError("tracking pagination repeated a token")
+            seen_tokens.add(token)
+        observed.append({
+            "run_id": business_id,
+            "architecture": spec["architecture"],
+            "source_spec": str(spec_path),
+            "source_spec_sha256": spec_digest,
+            "configuration": spec,
+            "tracking_state": "observed" if attempts else "unknown",
+            "attempts": attempts,
+        })
+    return {
+        "schema_version": "lob-pool-observation/v1",
+        "pool_id": definition["pool_id"],
+        "experiment_ids": list(experiment_ids),
+        "candidate_count": len(observed),
+        "candidates": observed,
+        "audit_evidence_reverified": False,
+        "process_liveness_verified": False,
+        "ranking_performed": False,
+    }
+
+
+def run_lob_pool(*, pool: str, qlib_python: str, research_root: str,
+                 tracking_uri: str | None = None) -> dict[str, object]:
     definition, candidates = validate_lob_pool(pool)
     python, runner = _runner(qlib_python, research_root)
     output_root = Path(str(candidates[0][1]["output_root"])).expanduser().resolve()
@@ -327,6 +419,7 @@ def run_lob_pool(*, pool: str, qlib_python: str, research_root: str) -> dict[str
                 runner.parent.parent,
                 run_root,
                 candidate_path,
+                **({"tracking_uri": tracking_uri} if tracking_uri is not None else {}),
             )
             completed.append(result)
         except (OSError, ValueError, subprocess.CalledProcessError) as exc:
