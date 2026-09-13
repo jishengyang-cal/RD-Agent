@@ -42,7 +42,7 @@ class EnvUtils(unittest.TestCase):
     # NOTE: Because you need to download the data during the prepare process. So you need to have pyqlib in your environment.
     def test_local(self):
         local_conf = LocalConf(
-            bin_path="/home/v-linlanglv/miniconda3/envs/RD-Agent-310/bin",
+            bin_path=str(Path(sys.executable).parent),
             default_entry="qrun conf.yaml",
         )
         qle = QlibLocalEnv(conf=local_conf)

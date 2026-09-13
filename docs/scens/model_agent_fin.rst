@@ -117,6 +117,64 @@ You can try our demo by running the following command:
 
         rdagent fin_model
 
+Strict-L2 candidate pools
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For a prepared strict-L2 research pool, ``fin_model`` can launch candidates
+and require a complete artifact audit of every candidate before publishing
+a ranking. This mode uses an external research checkout containing
+``scripts/run_lob_experiment.py`` and ``scripts/audit_lob_candidate.py``,
+plus a Python environment with that research project's Qlib dependencies and
+its prepared data, readiness artifact, and experiment specs. These research
+components are not bundled with RD-Agent.
+
+.. code-block:: sh
+
+    rdagent fin_model --lob-pool /absolute/path/pool.json \
+        --qlib-python /absolute/path/qlib-env/bin/python \
+        --research-root /absolute/path/research
+
+Both ``--qlib-python`` and ``--research-root`` are required for pool mode
+and are invalid without ``--lob-pool``. Do not combine pool mode with
+``--path``, ``--step-n``, ``--loop-n``, or ``--all-duration``; it does not run
+the generic model evolution/session loop.
+
+For the optional ``--lob-tracking-uri`` audit binding and the read-only
+``inspect_lob_pool`` API, see the central
+`MLflow workflow <../../../../../docs/modules/strategy/mlflow-development-workflow.md#12-持续推进进度候选查询与-agent-接线>`_.
+The central documentation root is located as described in ``AGENTS.override.md``
+when using an isolated checkout.
+
+Prepare the pool definition and candidate specs according to
+``validate_lob_pool`` and ``validate_lob_spec`` in
+``rdagent/app/lob_model_loop.py``, the authoritative input contracts.
+Use absolute paths for candidate files and paths inside specs. Candidates
+must share an evaluation cell and have distinct run identities; copying a
+spec to another filename does not create a distinct candidate. The search
+surface is limited to model and training settings, with strict-L2 readiness
+required and sealed final windows, champion locks, and historical VAP excluded.
+
+Training fits model parameters; validation alone determines candidate ranking
+and baseline screening, with an independent audit required for every candidate.
+Existing validation candidate results are reused and audited again. Both
+metrics and the independent audit must declare ``evaluation_segment=validation``.
+Legacy test/development-test outputs remain diagnostic evidence, but cannot
+enter this ranking; do not relabel them as validation results. Final-test data
+must remain outside candidate selection. For candidates
+without a published run directory, the research runner is invoked with
+``--resume-incomplete``. Any training, result-validation, or artifact-audit
+failure prevents publication of a partial ranking. Recover failed candidates
+before retrying the pool.
+
+The completed registry is written beneath the candidates' ``output_root`` as
+``challenger-pool-<pool_id>.json``. It contains every audited candidate in
+rank order, using validation mean multi-horizon macro-F1 descending, then mean up-Brier
+and mean tick-MAE ascending, with run ID as the final tie-breaker. The
+shortlist takes up to ``top_k`` candidates whose audit reports
+``baseline_screen.screening_effective=true``; it can be empty even when all
+artifact audits pass. An existing registry or its hidden ``.incomplete``
+staging file blocks another publication for that pool ID.
+
 🛠️ Usage of modules
 ~~~~~~~~~~~~~~~~~~~~~
 

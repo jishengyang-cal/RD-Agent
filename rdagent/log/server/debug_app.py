@@ -15,12 +15,16 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from rdagent.log.server.security import (
     parse_competition,
+    require_authentication,
     resolve_within,
+    serve_index,
     validate_scenario,
 )
 from rdagent.log.ui.conf import UI_SETTING
 
 app = Flask(__name__, static_folder=UI_SETTING.static_path)
+app.config["AUTH_TOKEN"] = UI_SETTING.server_auth_token
+app.before_request(require_authentication)
 
 rdagent_processes = defaultdict()
 server_port = 19899
@@ -86,7 +90,7 @@ def upload_file():
     loop_n = request.form.get("loops")
     all_duration = request.form.get("all_duration")
 
-    log_folder_path = Path("/home/bowen/workspace/new_traces").absolute()
+    log_folder_path = Path(UI_SETTING.trace_folder).expanduser().resolve()
 
     if scenario == "Data Science":
         try:
@@ -164,9 +168,7 @@ def test():
 
 @app.route("/", methods=["GET"])
 def index():
-    # return 'Hello, World!'
-    # return {k: [i["tag"] for i in v] for k, v in msgs_for_frontend.items()}
-    return send_from_directory(app.static_folder, "index.html")
+    return serve_index()
 
 
 @app.route("/<path:fn>", methods=["GET"])
