@@ -342,6 +342,33 @@ def _publish_candidate(spec_path: Path, *, f1: float) -> None:
     (run_root / "implementation.json").write_text(json.dumps(implementation))
 
 
+@pytest.mark.parametrize("schema", ["lob-implementation/v1", "lob-implementation/v2", "lob-implementation/v3"])
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_candidate_reader_preserves_versioned_identity_contract(tmp_path: Path, schema: str, *, corrupt: bool) -> None:
+    path, spec = _spec(tmp_path)
+    _publish_candidate(path, f1=0.3)
+    manifest_path = Path(spec["output_root"]) / _run_id(spec) / "implementation.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["schema_version"] = schema
+    if schema == "lob-implementation/v3":
+        # The reader only binds the result. Research's auditor owns verification.
+        manifest["qlib_source"] = {"scope": "synthetic-reader-fixture", "files": {}}
+    manifest.pop("sha256")
+    manifest["sha256"] = hashlib.sha256(
+        json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode(),
+    ).hexdigest()
+    if corrupt:
+        manifest["python"] = "changed-after-hash"
+    manifest_path.write_text(json.dumps(manifest))
+    if corrupt:
+        with pytest.raises(ValueError, match="implementation digest mismatch"):
+            _load_candidate_result(spec, path)
+    else:
+        result = _load_candidate_result(spec, path)
+        assert result["implementation_sha256"] == manifest["sha256"]
+        assert "audit" not in result
+
+
 def test_lob_pool_ranks_completed_immutable_candidates(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
