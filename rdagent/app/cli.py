@@ -97,6 +97,7 @@ def fin_model_cli(
     lob_pool: str | None = None,
     qlib_python: str | None = None,
     research_root: str | None = None,
+    lob_tracking_uri: str | None = None,
 ):
     fin_model(
         path=path,
@@ -107,6 +108,7 @@ def fin_model_cli(
         lob_pool=lob_pool,
         qlib_python=qlib_python,
         research_root=research_root,
+        lob_tracking_uri=lob_tracking_uri,
     )
 
 
