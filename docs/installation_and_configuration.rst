@@ -84,6 +84,10 @@ Optional parameters (required if your embedding model is provided by a different
 
 **Note:** If you are using an embedding model from a provider different from the chat model, remember to add the `litellm_proxy/` prefix to the `EMBEDDING_MODEL` name.
 
+When the LiteLLM backend starts, its settings log is limited to the selected
+chat and embedding models, reasoning effort, streaming mode, and response-schema
+support. Credential and endpoint settings are excluded from both the console
+message and the persisted ``LITELLM_SETTINGS`` log object.
 
 The `CHAT_MODEL` and `EMBEDDING_MODEL` parameters will be passed into LiteLLM's completion function. 
 

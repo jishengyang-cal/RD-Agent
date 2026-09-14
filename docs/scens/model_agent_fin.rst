@@ -139,6 +139,26 @@ and are invalid without ``--lob-pool``. Do not combine pool mode with
 ``--path``, ``--step-n``, ``--loop-n``, or ``--all-duration``; it does not run
 the generic model evolution/session loop.
 
+Callers that already record training in MLflow can pass ``tracking_uri`` to
+``run_lob_pool`` (or ``lob_tracking_uri`` to the Python ``model.main`` entry
+point) to bind each independent audit to the recorded training attempt. This
+does not configure or launch tracking. Each candidate must already have a
+non-symlink ``tracking/<run_id>/tracking-context.json`` beneath its
+``output_root``. The context's latest attempt must match the requested tracking
+URI, candidate run ID, source-spec digest, and a nonempty Recorder ID; otherwise
+the auditor is not launched. The verified URI and Recorder ID are passed
+explicitly to the external audit script.
+
+For read-only monitoring, ``inspect_lob_pool`` accepts an existing MLflow client
+and an explicit nonempty list of experiment IDs. It returns every configured
+candidate and all matching attempts, including candidates with no record and
+attempts in failed states, without launching training or audit subprocesses.
+Recorded metrics, audit summary tags, and the training-stage tag are exposed
+only for attempts whose run ID, source-spec digest, architecture, and
+unsealed-window marker match the candidate. This observation does not reverify
+audit evidence, check process liveness, rank candidates, or make a promotion
+decision.
+
 Prepare the pool definition and candidate specs according to
 ``validate_lob_pool`` and ``validate_lob_spec`` in
 ``rdagent/app/lob_model_loop.py``, the authoritative input contracts.
