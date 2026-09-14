@@ -7,7 +7,7 @@ requires = [
 
 [project]
 authors = [
-  {email = "xuyang1@microsoft.com", name = "MSRA-MIIC"},
+  { email = "xuyang1@microsoft.com", name = "MSRA-MIIC" },
 ]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -38,6 +38,17 @@ rdagent = "rdagent.app.cli:app"
 homepage = "https://github.com/microsoft/RD-Agent/"
 issue = "https://github.com/microsoft/RD-Agent/issues"
 
+[tool.black]
+force-exclude = '''
+(
+  ^/rdagent/app/lob_model_loop\.py
+  | ^/rdagent/app/qlib_rd_loop/model\.py
+  | ^/rdagent/oai/backend/litellm\.py
+  | ^/test/oai/test_base\.py
+  | ^/tests/test_lob_model_loop\.py
+)
+'''
+
 [tool.coverage.report]
 fail_under = 80
 
@@ -48,6 +59,10 @@ source = [
 
 [tool.isort]
 color_output = true
+extend_skip = [
+  "rdagent/app/qlib_rd_loop/model.py",
+  "tests/test_lob_model_loop.py",
+]
 profile = "black"
 
 [tool.mypy]
@@ -113,14 +128,14 @@ select = ["ALL"]
 packages = ["rdagent"]
 
 [tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
+dependencies = { file = ["requirements.txt"] }
 
 [tool.setuptools.dynamic.optional-dependencies]
-docs = {file = ["requirements/docs.txt"]}
-lint = {file = ["requirements/lint.txt"]}
-package = {file = ["requirements/package.txt"]}
-test = {file = ["requirements/test.txt"]}
-torch = {file = ["requirements/torch.txt"]} # some agent algorithms need torch.  pip install rdagent[torch]
+docs = { file = ["requirements/docs.txt"] }
+lint = { file = ["requirements/lint.txt"] }
+package = { file = ["requirements/package.txt"] }
+test = { file = ["requirements/test.txt"] }
+torch = { file = ["requirements/torch.txt"] } # some agent algorithms need torch.  pip install rdagent[torch]
 
 [tool.setuptools_scm]
 local_scheme = "no-local-version"
